@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.hire.application.mapper.ApplicationsMapper">
+
+    <!-- 新增投递记录，主键自增并回填到 id -->
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO t_applications (user_id, job_id, resume_id, employer_id, cover_letter, status, deleted)
+        VALUES (#{userId}, #{jobId}, #{resumeId}, #{employerId}, #{coverLetter}, #{status}, #{deleted})
+    </insert>
+
+    <!-- 判断当前用户是否已投递过该职位 -->
+    <select id="countByUserAndJob" resultType="int">
+        SELECT COUNT(*) FROM t_applications
+        WHERE user_id = #{userId} AND job_id = #{jobId} AND deleted = 0
+    </select>
+
+    <!-- 根据投递ID和投递人查询未删除记录 -->
+    <select id="selectByIdAndUser" resultType="com.hire.model.entity.Applications">
+        SELECT id, user_id AS userId, job_id AS jobId, resume_id AS resumeId,
+               employer_id AS employerId, cover_letter AS coverLetter, status, deleted,
+               create_time AS createTime, update_time AS updateTime
+        FROM t_applications
+        WHERE id = #{id} AND user_id = #{userId} AND deleted = 0
+    </select>
+
+    <!-- 根据投递ID查询未删除记录（不限用户，企业侧更新状态时使用，含 remark） -->
+    <select id="selectById" resultType="com.hire.model.entity.Applications">
+        SELECT id, user_id AS userId, job_id AS jobId, resume_id AS resumeId,
+               employer_id AS employerId, cover_letter AS coverLetter, remark, status, deleted,
+               create_time AS createTime, update_time AS updateTime
+        FROM t_applications
+        WHERE id = #{id} AND deleted = 0
+    </select>
+
+    <!-- 更新投递状态与备注（企业侧操作） -->
+    <update id="updateStatus">
+        UPDATE t_applications
+        SET status = #{status}, remark = #{remark}, update_time = NOW()
+        WHERE id = #{id} AND deleted = 0
+    </update>
+
+    <!-- 分页查询当前用户的投递记录，status 为空时不过滤 -->
+    <select id="selectPageByUser" resultType="com.hire.model.entity.Applications">
+        SELECT id, user_id AS userId, job_id AS jobId, resume_id AS resumeId,
+               employer_id AS employerId, cover_letter AS coverLetter, status, deleted,
+               create_time AS createTime, update_time AS updateTime
+        FROM t_applications
+        WHERE user_id = #{userId} AND deleted = 0
+        <if test="status != null">AND status = #{status}</if>
+        ORDER BY id DESC
+        LIMIT #{offset}, #{size}
+    </select>
+
+    <!-- 统计当前用户的投递总数，status 为空时不过滤 -->
+    <select id="countByUser" resultType="long">
+        SELECT COUNT(*) FROM t_applications
+        WHERE user_id = #{userId} AND deleted = 0
+        <if test="status != null">AND status = #{status}</if>
+    </select>
+
+    <!-- 分页查询当前企业收到的投递记录，jobId / status 为空时不过滤 -->
+    <select id="selectPageByEmployer" resultType="com.hire.model.entity.Applications">
+        SELECT id, user_id AS userId, job_id AS jobId, resume_id AS resumeId,
+               employer_id AS employerId, cover_letter AS coverLetter, status, deleted,
+               create_time AS createTime, update_time AS updateTime
+        FROM t_applications
+        WHERE employer_id = #{employerId} AND deleted = 0
+        <if test="jobId != null">AND job_id = #{jobId}</if>
+        <if test="status != null">AND status = #{status}</if>
+        ORDER BY id DESC
+        LIMIT #{offset}, #{size}
+    </select>
+
+    <!-- 统计当前企业收到的投递总数，jobId / status 为空时不过滤 -->
+    <select id="countByEmployer" resultType="long">
+        SELECT COUNT(*) FROM t_applications
+        WHERE employer_id = #{employerId} AND deleted = 0
+        <if test="jobId != null">AND job_id = #{jobId}</if>
+        <if test="status != null">AND status = #{status}</if>
+    </select>
+
+    <!-- 按状态分组统计指定职位的投递数量 -->
+    <select id="countByJobGroupByStatus" resultType="com.hire.model.dto.StatusCountDTO">
+        SELECT status, COUNT(*) AS total FROM t_applications
+        WHERE job_id = #{jobId} AND deleted = 0
+        GROUP BY status
+    </select>
+
+</mapper>

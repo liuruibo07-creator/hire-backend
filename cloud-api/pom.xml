@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.edu</groupId>
+        <artifactId>cloud-demo</artifactId>
+        <version>1.0</version>
+    </parent>
+
+    <artifactId>cloud-api</artifactId>
+    <name>cloud-api</name>
+    <description>公共模块：DTO、Feign 接口、公共工具类</description>
+
+    <dependencies>
+        <!-- web（公共返回结果、DTO 等需要） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <!-- Feign 声明式服务调用 -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-openfeign</artifactId>
+        </dependency>
+        <!-- 负载均衡 -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-loadbalancer</artifactId>
+        </dependency>
+        <!-- 公共模块：JwtUtil、UserContext 等 -->
+        <dependency>
+            <groupId>com.edu</groupId>
+            <artifactId>cloud-common</artifactId>
+        </dependency>
+<!--        model-->
+        <dependency>
+            <groupId>com.edu</groupId>
+            <artifactId>cloud-model</artifactId>
+        </dependency>
+    </dependencies>
+</project>

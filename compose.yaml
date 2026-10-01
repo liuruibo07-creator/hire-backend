@@ -1,0 +1,241 @@
+name: hire
+x-app-env: &app-env
+  NACOS_SERVER_ADDR: nacos:8848
+  JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+  SPRING_REDIS_HOST: redis
+  SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
+  CLOUD_DATASOURCE_HOST: mysql
+  CLOUD_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+  SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${APP_DB:-cloud_user}?useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+  SPRING_RABBITMQ_HOST: rabbitmq
+  RABBITMQ_USER: ${RABBITMQ_USER:-hire}
+  RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in .env}
+  CLOUD_ELASTICSEARCH_HOST: elasticsearch
+  SPRING_CLOUD_SENTINEL_ENABLED: "false"
+  SEATA_TX_SERVICE_GROUP: hire_tx_group
+  SEATA_SERVICE_VGROUP_MAPPING_HIRE_TX_GROUP: default
+  SEATA_SERVICE_GROUPLIST_DEFAULT: seata:8091
+  SEATA_REGISTRY_TYPE: file
+  SEATA_CONFIG_TYPE: file
+  MYBATIS_CONFIGURATION_MAP_UNDERSCORE_TO_CAMEL_CASE: "true"
+  MYBATIS_MAPPER_LOCATIONS: classpath*:com/hire/**/mapper/*.xml,classpath*:mapper/*.xml
+  JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=70.0
+services:
+  mysql:
+    image: mysql:8.0.36
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./deploy/mysql:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+  redis:
+    image: redis:7.2.5-alpine
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
+    command: ["sh", "-c", "exec redis-server --appendonly yes --requirepass \"$$REDIS_PASSWORD\""]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+  rabbitmq:
+    image: rabbitmq:3.13.7-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-hire}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in .env}
+      RABBITMQ_DEFAULT_VHOST: hire
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+  nacos:
+    image: nacos/nacos-server:v2.2.3
+    environment:
+      MODE: standalone
+      JVM_XMS: 256m
+      JVM_XMX: 512m
+    volumes:
+      - nacos-data:/home/nacos/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8848/nacos/v1/console/health/readiness"]
+      interval: 10s
+      timeout: 5s
+      retries: 60
+  elasticsearch:
+    build: ./deploy/elasticsearch
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS 'http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=3s'"]
+      interval: 10s
+      timeout: 5s
+      retries: 60
+  seata:
+    image: seataio/seata-server:2.0.0
+    environment:
+      SEATA_PORT: 8091
+      STORE_MODE: file
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+      SEATA_CONSOLE_PASSWORD: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in .env}
+    volumes:
+      - ./deploy/seata/application.yml:/seata-server/resources/application.yml:ro
+      - seata-data:/seata-server/sessionStore
+  cloud-gateway:
+    build:
+      context: .
+      args:
+        SERVICE: cloud-gateway
+    restart: on-failure
+    environment:
+      <<: *app-env
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      seata:
+        condition: service_started
+  user-service:
+    build:
+      context: .
+      args:
+        SERVICE: user-service
+    restart: on-failure
+    environment:
+      <<: *app-env
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/cloud_user?useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      seata:
+        condition: service_started
+  job-service:
+    build:
+      context: .
+      args:
+        SERVICE: job-service
+    restart: on-failure
+    environment:
+      <<: *app-env
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/cloud_job?useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      seata:
+        condition: service_started
+  application-service:
+    build:
+      context: .
+      args:
+        SERVICE: application-service
+    restart: on-failure
+    environment:
+      <<: *app-env
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/cloud_application?useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      seata:
+        condition: service_started
+  notification-service:
+    build:
+      context: .
+      args:
+        SERVICE: notification-service
+    restart: on-failure
+    environment:
+      <<: *app-env
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/cloud_notification?useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      seata:
+        condition: service_started
+  chat-service:
+    build:
+      context: .
+      args:
+        SERVICE: chat-service
+    restart: on-failure
+    environment:
+      <<: *app-env
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/cloud_chat?useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+      CHAT_ALLOWED_ORIGINS: ${CHAT_ALLOWED_ORIGINS:-http://localhost:8080}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      seata:
+        condition: service_started
+  frontend:
+    build: ../hire-frontend
+    ports:
+      - "127.0.0.1:${WEB_PORT:-8080}:80"
+    depends_on:
+      - cloud-gateway
+volumes:
+  mysql-data:
+  redis-data:
+  rabbitmq-data:
+  nacos-data:
+  es-data:
+  seata-data:

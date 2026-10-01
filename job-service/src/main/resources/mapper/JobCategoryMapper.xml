@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hire.job.mapper.JobCategoryMapper">
+
+    <resultMap id="jobCategoryResultMap" type="com.hire.model.entity.JobCategory">
+        <id column="id" property="id"/>
+        <result column="parent_id" property="parentId"/>
+        <result column="name" property="name"/>
+        <result column="sort_order" property="sortOrder"/>
+        <result column="level" property="level"/>
+        <result column="status" property="status"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+        <result column="deleted" property="deleted"/>
+    </resultMap>
+
+    <select id="selectAllEnabled" resultMap="jobCategoryResultMap">
+        select *
+        from t_job_category
+        where deleted = 0 and status = 1
+        order by level asc, sort_order asc, id asc
+    </select>
+
+    <select id="selectById" resultMap="jobCategoryResultMap">
+        select *
+        from t_job_category
+        where id = #{id} and deleted = 0 and status = 1
+    </select>
+</mapper>

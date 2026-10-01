@@ -1,0 +1,55 @@
+server:
+  port: 8083
+
+# 配置微服务与Sentinel控制台的连接
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${cloud.datasource.host}:${cloud.datasource.port}/${cloud.datasource.dbname}?useSSL=false&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    username: ${cloud.datasource.username}
+    password: ${cloud.datasource.password}
+  cloud:
+    sentinel:
+      transport:
+        dashboard: ${SENTINEL_DASHBOARD:localhost:8858}   #指定控制台地址
+        port: 8719  #指定客户端端口
+      eager: true  #默认值为false,表示懒加载,设置为true,Sentinel会在应用启动时立即初始化
+      http-method-specify: true  #开启之后,资源名称中将包含请求方式,用来区分Restful风格接口
+  # Redis：职位信息/分类树缓存、浏览量计数（docker 部署见环境搭建文档第9节）
+  redis:
+    host: ${INFRA_HOST:localhost}
+    port: 6379
+    password: ${REDIS_PASSWORD}
+    timeout: 3s
+
+#MyBatis配置
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  type-aliases-package: com.hire.model.entity
+  configuration:
+    map-underscore-to-camel-case: true
+
+#微服务自定义配置
+cloud:
+  datasource:
+    host: ${INFRA_HOST:localhost}
+    port: 3306
+    dbname: cloud_job
+    username: ${DB_USER:root}
+    password: ${MYSQL_ROOT_PASSWORD}
+  # Elasticsearch 7.12.1 连接配置
+  elasticsearch:
+    host: ${INFRA_HOST:localhost}
+    port: 9200
+  # 雪花算法机器配置
+  snowflake:
+    worker-id: 1
+    datacenter-id: 1
+
+#让Sentinel能识别feign接口为资源
+feign:
+  sentinel:
+    enabled: true
+
+seata:
+  data-source-proxy-mode: AT

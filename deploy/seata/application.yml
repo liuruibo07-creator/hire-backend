@@ -1,0 +1,22 @@
+server:
+  port: 7091
+spring:
+  application:
+    name: seata-server
+seata:
+  config:
+    type: file
+  registry:
+    type: file
+  store:
+    mode: file
+    file:
+      dir: /seata-server/sessionStore
+  server:
+    service-port: 8091
+  security:
+    secretKey: ${JWT_SECRET}
+console:
+  user:
+    username: ${SEATA_CONSOLE_USER:hire}
+    password: ${SEATA_CONSOLE_PASSWORD}

@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hire.job.mapper.JobMapper">
+
+    <resultMap id="jobResultMap" type="com.hire.model.entity.Job">
+        <id column="id" property="id"/>
+        <result column="employer_id" property="employerId"/>
+        <result column="title" property="title"/>
+        <result column="category_id" property="categoryId"/>
+        <result column="description" property="description"/>
+        <result column="job_type" property="jobType"/>
+        <result column="industry" property="industry"/>
+        <result column="city" property="city"/>
+        <result column="address" property="address"/>
+        <result column="experience_req" property="experienceReq"/>
+        <result column="education_req" property="educationReq"/>
+        <result column="salary_min" property="salaryMin"/>
+        <result column="salary_max" property="salaryMax"/>
+        <result column="salary_months" property="salaryMonths"/>
+        <result column="skills" property="skills"/>
+        <result column="headcount" property="headcount"/>
+        <result column="status" property="status"/>
+        <result column="view_count" property="viewCount"/>
+        <result column="apply_count" property="applyCount"/>
+        <result column="review_remark" property="reviewRemark"/>
+        <result column="reviewed_by" property="reviewedBy"/>
+        <result column="reviewed_at" property="reviewedAt"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+        <result column="deleted" property="deleted"/>
+    </resultMap>
+
+    <sql id="jobColumns">
+        id, employer_id, title, category_id, description, job_type, industry, city, address,
+        experience_req, education_req, salary_min, salary_max, salary_months, skills, headcount,
+        status, view_count, apply_count, review_remark, reviewed_by, reviewed_at,
+        create_time, update_time, deleted
+    </sql>
+
+    <insert id="insert" parameterType="com.hire.model.entity.Job">
+        insert into t_job (id, employer_id, title, category_id, description, job_type, industry,
+                           city, address, experience_req, education_req, salary_min, salary_max,
+                           salary_months, skills, headcount, status, view_count, apply_count,
+                           review_remark, reviewed_by, reviewed_at, create_time, deleted)
+        values (#{id}, #{employerId}, #{title}, #{categoryId}, #{description}, #{jobType}, #{industry},
+                #{city}, #{address}, #{experienceReq}, #{educationReq}, #{salaryMin}, #{salaryMax},
+                #{salaryMonths}, #{skills}, #{headcount}, #{status}, #{viewCount}, #{applyCount},
+                #{reviewRemark}, #{reviewedBy}, #{reviewedAt}, #{createTime}, #{deleted})
+    </insert>
+
+    <select id="selectById" resultMap="jobResultMap">
+        select <include refid="jobColumns"/>
+        from t_job
+        where id = #{id} and deleted = 0
+    </select>
+
+    <!-- 详情查询与 selectById 一致，独立 statement 便于按需扩展(如加锁) -->
+    <select id="selectDetailById" resultMap="jobResultMap">
+        select <include refid="jobColumns"/>
+        from t_job
+        where id = #{id} and deleted = 0
+    </select>
+
+    <update id="update" parameterType="com.hire.model.entity.Job">
+        update t_job
+        <set>
+            <if test="title != null">title = #{title},</if>
+            <if test="categoryId != null">category_id = #{categoryId},</if>
+            <if test="description != null">description = #{description},</if>
+            <if test="jobType != null">job_type = #{jobType},</if>
+            <if test="industry != null">industry = #{industry},</if>
+            <if test="city != null">city = #{city},</if>
+            <if test="address != null">address = #{address},</if>
+            <if test="experienceReq != null">experience_req = #{experienceReq},</if>
+            <if test="educationReq != null">education_req = #{educationReq},</if>
+            <if test="salaryMin != null">salary_min = #{salaryMin},</if>
+            <if test="salaryMax != null">salary_max = #{salaryMax},</if>
+            <if test="salaryMonths != null">salary_months = #{salaryMonths},</if>
+            <if test="skills != null">skills = #{skills},</if>
+            <if test="headcount != null">headcount = #{headcount},</if>
+            <if test="status != null">status = #{status},</if>
+        </set>
+        where id = #{id} and deleted = 0
+    </update>
+
+    <update id="updateStatus">
+        update t_job
+        set status = #{status}
+        where id = #{id} and deleted = 0
+    </update>
+
+    <update id="updateWithReview">
+        update t_job
+        set status = #{status},
+            review_remark = #{reviewRemark},
+            reviewed_by = #{reviewedBy},
+            reviewed_at = #{reviewedAt}
+        where id = #{id} and deleted = 0
+    </update>
+
+    <update id="clearReview">
+        update t_job
+        set review_remark = null,
+            reviewed_by = null,
+            reviewed_at = null
+        where id = #{id} and deleted = 0
+    </update>
+
+    <update id="incrementViewCount">
+        update t_job
+        set view_count = view_count + 1
+        where id = #{id} and deleted = 0
+    </update>
+
+    <select id="selectPageByEmployer" resultMap="jobResultMap">
+        select <include refid="jobColumns"/>
+        from t_job
+        where employer_id = #{employerId} and deleted = 0
+        <if test="status != null">and status = #{status}</if>
+        <if test="keyword != null and keyword != ''">and title like concat('%', #{keyword}, '%')</if>
+        order by create_time desc
+        limit #{offset}, #{size}
+    </select>
+
+    <select id="countByEmployer" resultType="long">
+        select count(*)
+        from t_job
+        where employer_id = #{employerId} and deleted = 0
+        <if test="status != null">and status = #{status}</if>
+        <if test="keyword != null and keyword != ''">and title like concat('%', #{keyword}, '%')</if>
+    </select>
+
+    <select id="selectPageForAdmin" resultMap="jobResultMap">
+        select <include refid="jobColumns"/>
+        from t_job
+        where deleted = 0
+        <if test="status != null">and status = #{status}</if>
+        <if test="city != null and city != ''">and city = #{city}</if>
+        <if test="employerId != null">and employer_id = #{employerId}</if>
+        <if test="keyword != null and keyword != ''">and title like concat('%', #{keyword}, '%')</if>
+        order by create_time desc
+        limit #{offset}, #{size}
+    </select>
+
+    <select id="countForAdmin" resultType="long">
+        select count(*)
+        from t_job
+        where deleted = 0
+        <if test="status != null">and status = #{status}</if>
+        <if test="city != null and city != ''">and city = #{city}</if>
+        <if test="employerId != null">and employer_id = #{employerId}</if>
+        <if test="keyword != null and keyword != ''">and title like concat('%', #{keyword}, '%')</if>
+    </select>
+
+    <select id="countTotal" resultType="long">
+        select count(*)
+        from t_job
+        where deleted = 0
+    </select>
+
+    <select id="selectAllForSync" resultMap="jobResultMap">
+        select <include refid="jobColumns"/>
+        from t_job
+        where deleted = 0
+        order by create_time desc
+    </select>
+
+    <select id="countDailyNew" resultType="map">
+        select date_format(create_time, '%Y-%m-%d') as date, count(*) as count
+        from t_job
+        where deleted = 0 and create_time &gt;= #{start}
+        group by date_format(create_time, '%Y-%m-%d')
+    </select>
+</mapper>

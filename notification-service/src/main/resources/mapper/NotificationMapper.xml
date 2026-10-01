@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hire.notification.mapper.NotificationMapper">
+
+    <resultMap id="BaseResultMap" type="com.hire.model.entity.Notification">
+        <id column="id" property="id"/>
+        <result column="user_id" property="userId"/>
+        <result column="title" property="title"/>
+        <result column="content" property="content"/>
+        <result column="type" property="type"/>
+        <result column="related_id" property="relatedId"/>
+        <result column="is_read" property="isRead"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+        <result column="deleted" property="deleted"/>
+    </resultMap>
+
+    <insert id="insert">
+        INSERT INTO t_notification (id, user_id, title, content, type, related_id, is_read, deleted)
+        VALUES (#{id}, #{userId}, #{title}, #{content}, #{type}, #{relatedId}, #{isRead}, #{deleted})
+    </insert>
+
+    <select id="selectList" resultMap="BaseResultMap">
+        SELECT id, user_id, title, content, type, related_id, is_read, create_time, update_time, deleted
+        FROM t_notification
+        WHERE deleted = 0
+        <if test="userId != null">
+            AND user_id = #{userId}
+        </if>
+        <if test="type != null and type != ''">
+            AND type = #{type}
+        </if>
+        <if test="isRead != null">
+            AND is_read = #{isRead}
+        </if>
+        ORDER BY create_time DESC
+        LIMIT #{offset}, #{size}
+    </select>
+
+    <!-- 过滤条件与 selectList 完全一致，保证分页 total 与列表数据口径相同 -->
+    <select id="countList" resultType="long">
+        SELECT COUNT(*)
+        FROM t_notification
+        WHERE deleted = 0
+        <if test="userId != null">
+            AND user_id = #{userId}
+        </if>
+        <if test="type != null and type != ''">
+            AND type = #{type}
+        </if>
+        <if test="isRead != null">
+            AND is_read = #{isRead}
+        </if>
+    </select>
+
+    <select id="countUnread" resultType="int">
+        SELECT COUNT(*)
+        FROM t_notification
+        WHERE deleted = 0 AND user_id = #{userId} AND is_read = 0
+    </select>
+
+    <!-- 限定 user_id，防止通过遍历 id 标记他人通知为已读 -->
+    <update id="markAsRead">
+        UPDATE t_notification
+        SET is_read = 1
+        WHERE id = #{id} AND user_id = #{userId} AND deleted = 0
+    </update>
+
+    <update id="markAllAsRead">
+        UPDATE t_notification
+        SET is_read = 1
+        WHERE deleted = 0 AND user_id = #{userId} AND is_read = 0
+    </update>
+
+</mapper>

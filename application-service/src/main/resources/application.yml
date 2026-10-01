@@ -1,0 +1,49 @@
+server:
+  port: 8082
+
+# 配置微服务与Sentinel控制台的连接
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${cloud.datasource.host}:${cloud.datasource.port}/${cloud.datasource.dbname}?useSSL=false&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    username: ${cloud.datasource.username}
+    password: ${cloud.datasource.password}
+  cloud:
+    sentinel:
+      transport:
+        dashboard: ${SENTINEL_DASHBOARD:localhost:8858}   #指定控制台地址
+        port: 8719  #指定客户端端口
+      eager: true  #默认值为false,表示懒加载,设置为true,Sentinel会在应用启动时立即初始化
+      http-method-specify: true  #开启之后,资源名称中将包含请求方式,用来区分Restful风格接口
+  rabbitmq:
+    host: ${INFRA_HOST:localhost}
+    port: 5672
+    virtual-host: ${RABBITMQ_VHOST:hire}
+    username: ${RABBITMQ_USER:hire}
+    password: ${RABBITMQ_PASSWORD}
+    # 开启生产者确认：发送结果通过 ConfirmCallback 异步回调
+    publisher-confirm-type: correlated
+    # mandatory=true 时路由不到队列会回调 ReturnsCallback，否则消息被静默丢弃
+    publisher-returns: true
+  # Redis：投递防连点锁、统计缓存（docker 部署见环境搭建文档第9节）
+  redis:
+    host: ${INFRA_HOST:localhost}
+    port: 6379
+    password: ${REDIS_PASSWORD}
+    timeout: 3s
+#微服务自定义配置
+cloud:
+  datasource:
+    host: ${INFRA_HOST:localhost}
+    port: 3306
+    dbname: cloud_application
+    username: ${DB_USER:root}
+    password: ${MYSQL_ROOT_PASSWORD}
+
+#让Sentinel能识别feign接口为资源
+feign:
+  sentinel:
+    enabled: true
+
+seata:
+  data-source-proxy-mode: AT

@@ -1,0 +1,1 @@
+-- Compatibility filename; use application.sql for the canonical schema.

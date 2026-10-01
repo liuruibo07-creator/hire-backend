@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.edu</groupId>
+        <artifactId>cloud-demo</artifactId>
+        <version>1.0</version>
+    </parent>
+
+    <artifactId>cloud-common</artifactId>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+
+    <dependencies>
+        <!-- web：提供 HandlerInterceptor、HttpServletRequest/Response、Servlet API
+             用 provided：仅本模块编译需要，不向下传递。
+             否则会污染 cloud-gateway（WebFlux），导致网关被判定为 Servlet 应用而启动失败。
+             各微服务已自行引入 spring-boot-starter-web，运行时不受影响。 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <!-- jwt：JwtUtil 需要 -->
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt</artifactId>
+        </dependency>
+        <!-- redis：RedisUtil 编译期依赖。
+             用 provided：仅本模块编译需要，不向下传递，
+             否则会污染 cloud-gateway（WebFlux）及各未启用缓存的服务；
+             需要缓存的微服务自行引入 spring-boot-starter-data-redis。 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <!-- JDK9+ 使用 jjwt 0.9.x 需要 JAXB -->
+        <dependency>
+            <groupId>javax.xml.bind</groupId>
+            <artifactId>jaxb-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.sun.xml.bind</groupId>
+            <artifactId>jaxb-impl</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.sun.xml.bind</groupId>
+            <artifactId>jaxb-core</artifactId>
+        </dependency>
+    </dependencies>
+
+</project>

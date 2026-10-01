@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.hire.application.mapper.ResumeMapper">
+
+    <!-- 动态更新简历：前端传了哪些字段就更新哪些字段，未传的保持原值 -->
+    <update id="updateResume" parameterType="com.hire.model.entity.Resume">
+        UPDATE t_resume
+        <set>
+            <if test="title != null and title != ''">title = #{title},</if>
+            <if test="name != null and name != ''">name = #{name},</if>
+            <if test="gender != null">gender = #{gender},</if>
+            <if test="birthYear != null">birth_year = #{birthYear},</if>
+            <if test="phone != null and phone != ''">phone = #{phone},</if>
+            <if test="email != null and email != ''">email = #{email},</if>
+            <if test="education != null and education != ''">education = #{education},</if>
+            <if test="university != null and university != ''">university = #{university},</if>
+            <if test="major != null and major != ''">major = #{major},</if>
+            <if test="graduationDate != null and graduationDate != ''">graduation_date = #{graduationDate},</if>
+            <if test="workExperience != null and workExperience != ''">work_experience = #{workExperience},</if>
+            <if test="skills != null and skills != ''">skills = #{skills},</if>
+            <if test="expectedPosition != null and expectedPosition != ''">expected_position = #{expectedPosition},</if>
+            <if test="expectedSalary != null and expectedSalary != ''">expected_salary = #{expectedSalary},</if>
+            <if test="expectedCity != null and expectedCity != ''">expected_city = #{expectedCity},</if>
+            <if test="selfEvaluation != null and selfEvaluation != ''">self_evaluation = #{selfEvaluation},</if>
+            <if test="isDefault != null">is_default = #{isDefault},</if>
+        </set>
+        WHERE id = #{id}
+        AND user_id = #{userId}
+        AND deleted = 0
+    </update>
+
+    <!-- 查询当前用户的所有未删除简历 -->
+    <select id="selectByUserId" resultType="com.hire.model.entity.Resume">
+        SELECT id, user_id AS userId, title, name, gender, birth_year AS birthYear, phone, email,
+               education, university, major, graduation_date AS graduationDate, work_experience AS workExperience,
+               skills, expected_position AS expectedPosition, expected_salary AS expectedSalary,
+               expected_city AS expectedCity, self_evaluation AS selfEvaluation, is_default AS isDefault, deleted
+        FROM t_resume
+        WHERE user_id = #{userId}
+          AND deleted = 0
+        ORDER BY is_default DESC, id DESC
+    </select>
+
+    <!-- 根据简历 ID 和用户 ID 查询未删除简历 -->
+    <select id="selectById" resultType="com.hire.model.entity.Resume">
+        SELECT id, user_id AS userId, title, name, gender, birth_year AS birthYear, phone, email,
+               education, university, major, graduation_date AS graduationDate, work_experience AS workExperience,
+               skills, expected_position AS expectedPosition, expected_salary AS expectedSalary,
+               expected_city AS expectedCity, self_evaluation AS selfEvaluation, is_default AS isDefault, deleted
+        FROM t_resume
+        WHERE id = #{id}
+          AND user_id = #{userId}
+          AND deleted = 0
+    </select>
+
+    <!-- 根据简历 ID 查询未删除简历（不限用户：企业查看收到的投递时需要读取求职者的简历） -->
+    <select id="selectByIdOnly" resultType="com.hire.model.entity.Resume">
+        SELECT id, user_id AS userId, title, name, gender, birth_year AS birthYear, phone, email,
+               education, university, major, graduation_date AS graduationDate, work_experience AS workExperience,
+               skills, expected_position AS expectedPosition, expected_salary AS expectedSalary,
+               expected_city AS expectedCity, self_evaluation AS selfEvaluation, is_default AS isDefault, deleted
+        FROM t_resume
+        WHERE id = #{id}
+          AND deleted = 0
+    </select>
+
+    <!-- 查询当前用户的默认简历 -->
+    <select id="selectDefaultByUserId" resultType="com.hire.model.entity.Resume">
+        SELECT id, user_id AS userId, title, name, gender, birth_year AS birthYear, phone, email,
+               education, university, major, graduation_date AS graduationDate, work_experience AS workExperience,
+               skills, expected_position AS expectedPosition, expected_salary AS expectedSalary,
+               expected_city AS expectedCity, self_evaluation AS selfEvaluation, is_default AS isDefault, deleted
+        FROM t_resume
+        WHERE user_id = #{userId}
+          AND is_default = 1
+          AND deleted = 0
+        LIMIT 1
+    </select>
+
+    <!-- 逻辑删除简历 -->
+    <update id="logicalDelete">
+        UPDATE t_resume
+        SET deleted = 1
+        WHERE id = #{id}
+          AND user_id = #{userId}
+          AND deleted = 0
+    </update>
+
+    <!-- 取消当前用户所有简历的默认标记 -->
+    <update id="clearDefaultByUserId">
+        UPDATE t_resume
+        SET is_default = 0
+        WHERE user_id = #{userId}
+          AND deleted = 0
+    </update>
+
+    <!-- 将指定简历设为默认简历 -->
+    <update id="setDefault">
+        UPDATE t_resume
+        SET is_default = 1
+        WHERE id = #{id}
+          AND user_id = #{userId}
+          AND deleted = 0
+    </update>
+
+</mapper>

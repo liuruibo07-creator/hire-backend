@@ -1,0 +1,56 @@
+server:
+  port: 10086
+spring:
+  cloud:
+    gateway:
+      routes:
+        - id: chat-websocket
+          uri: lb:ws://chat-service
+          predicates:
+            - Path=/api/chat/ws
+          filters:
+            - StripPrefix=2
+        - id: user
+          uri: lb://user-service
+          predicates:
+            - Path=/api/user/**
+        - id: job
+          uri: lb://job-service
+          predicates:
+            - Path=/api/job/**
+          filters:
+            - StripPrefix=2
+        - id: application
+          uri: lb://application-service
+          predicates:
+            - Path=/api/application/**
+          filters:
+            - StripPrefix=2
+        - id: notification
+          uri: lb://notification-service
+          predicates:
+            - Path=/api/notification/**
+          filters:
+            - StripPrefix=2
+        - id: chat
+          uri: lb://chat-service
+          predicates:
+            - Path=/api/chat/**
+          filters:
+            - StripPrefix=2
+  main:
+    web-application-type: reactive  #设置web的类型为响应式
+  # Redis（响应式）：登录限流计数（docker 部署见环境搭建文档第9节）
+  redis:
+    host: ${INFRA_HOST:localhost}
+    port: 6379
+    password: ${REDIS_PASSWORD}
+    timeout: 3s
+#定义放行的白名单
+cloud:
+  whitePaths:
+    - /api/user/users/login
+    - /api/user/users/register
+    - /api/job/jobs/search
+    - '/api/job/jobs/{id:[0-9]+}'
+    - /api/job/categories
