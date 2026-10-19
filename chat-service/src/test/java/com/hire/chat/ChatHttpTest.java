@@ -29,7 +29,7 @@ class ChatHttpTest {
                 .addInterceptors(new ChatAuthInterceptor(new ChatAuthentication(directory))).build();
     }
     String auth(long userId,String role,long ttl) {
-        return "Bearer "+JwtUtil.createJWT(JwtConstant.SECRET_KEY,ttl,new java.util.HashMap<>(Map.of("userId",userId,"role",role)));
+        return "Bearer "+JwtUtil.createJWT(JwtConstant.secretKey(),ttl,new java.util.HashMap<>(Map.of("userId",userId,"role",role)));
     }
     @Test void rejectsMissingInvalidExpiredTokensAndForgedHeaders() throws Exception {
         mvc.perform(get("/conversations").header("userId","10").header("role","seeker")).andExpect(status().isUnauthorized());

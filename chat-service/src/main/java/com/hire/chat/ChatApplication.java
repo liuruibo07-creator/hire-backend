@@ -11,5 +11,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableFeignClients(basePackages = "com.hire.api.clients")
 @MapperScan("com.hire.chat.mapper")
 public class ChatApplication {
-    public static void main(String[] args) { SpringApplication.run(ChatApplication.class, args); }
+    public static void main(String[] args) {
+        com.hire.common.constant.JwtConstant.secretKey();
+        SpringApplication.run(ChatApplication.class, args);
+    }
 }

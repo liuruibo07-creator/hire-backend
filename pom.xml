@@ -167,4 +167,18 @@
             <version>${elasticsearch.version}</version>
         </dependency>
     </dependencies>
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <systemPropertyVariables>
+                        <!-- Test JVM only; never packaged into application configuration. -->
+                        <hire.jwt.secret>test-only-jwt-signing-key-at-least-32-bytes</hire.jwt.secret>
+                    </systemPropertyVariables>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>

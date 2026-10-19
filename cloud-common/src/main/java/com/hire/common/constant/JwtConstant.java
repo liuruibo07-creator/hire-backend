@@ -4,12 +4,10 @@ public class JwtConstant {
     /**
      * 签名密钥，必须与网关 UserLoginGlobalFilter 中解析 token 使用的密钥保持一致
      */
-    public static final String SECRET_KEY = loadSecret();
-
-    private static String loadSecret() {
-        String value = System.getProperty("hire.jwt.secret", System.getenv("JWT_SECRET"));
-        if (value == null || value.length() < 32) {
-            throw new IllegalStateException("Set JWT_SECRET (at least 32 characters) consistently for all services");
+    public static String secretKey() {
+        String value = System.getProperty("hire.jwt.secret", System.getenv().getOrDefault("HIRE_JWT_SECRET", System.getenv("JWT_SECRET")));
+        if (value == null || value.isBlank() || value.getBytes(java.nio.charset.StandardCharsets.UTF_8).length < 32) {
+            throw new IllegalStateException("Set HIRE_JWT_SECRET (or JWT_SECRET) to a random secret of at least 32 bytes");
         }
         return value;
     }

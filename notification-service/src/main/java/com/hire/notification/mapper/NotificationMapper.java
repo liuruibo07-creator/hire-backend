@@ -2,10 +2,15 @@ package com.hire.notification.mapper;
 
 import com.hire.model.entity.Notification;
 import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Insert;
 
 import java.util.List;
 
 public interface NotificationMapper {
+
+    /** Receipt and notification are committed together; concurrent redeliveries wait on this key. */
+    @Insert("INSERT IGNORE INTO t_notification_event (message_id) VALUES (#{messageId})")
+    int claimEvent(@Param("messageId") String messageId);
 
     /**
      * 新增通知

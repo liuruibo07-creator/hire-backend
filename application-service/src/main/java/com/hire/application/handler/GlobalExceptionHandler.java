@@ -1,6 +1,6 @@
 package com.hire.application.handler;
 
-import com.hire.common.Result;
+import com.hire.common.domain.Result;
 import com.hire.common.exception.BusinessException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
@@ -9,6 +9,7 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 
 @RestControllerAdvice
 @Slf4j
@@ -19,7 +20,7 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(BusinessException.class)
     public Result handleBusinessException(BusinessException e) {
-        return Result.error(e.getMessage());
+        return Result.error(400, e.getMessage());
     }
 
     /**
@@ -28,17 +29,18 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(DuplicateKeyException.class)
     public Result handleDuplicateKeyException(DuplicateKeyException e) {
         log.warn("唯一索引冲突: {}", e.getMessage());
-        return Result.error("已投递过该职位，请勿重复投递");
+        return Result.error(409, "记录已存在，请勿重复操作");
     }
 
     /**
      * 路径变量/请求参数类型不匹配（例如把非数字当作 id 传入）
      * 属于客户端请求问题，不应笼统地返回“服务器异常”
      */
-    @ExceptionHandler({MethodArgumentTypeMismatchException.class, MissingServletRequestParameterException.class})
+    @ExceptionHandler({MethodArgumentTypeMismatchException.class, MissingServletRequestParameterException.class,
+            HttpMessageNotReadableException.class})
     public Result handleArgumentException(Exception e) {
         log.warn("请求参数不合法: {}", e.getMessage());
-        return Result.error("请求参数不合法");
+        return Result.error(400, "请求参数不合法");
     }
 
     /**
@@ -47,7 +49,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
     public Result handleMethodNotSupported(HttpRequestMethodNotSupportedException e) {
         log.warn("请求方法不支持: {}", e.getMessage());
-        return Result.error("请求方法不支持，请检查请求方式（如应使用 POST/PUT）");
+        return Result.error(405, "请求方法不支持，请检查请求方式（如应使用 POST/PUT）");
     }
 
     /**
@@ -60,7 +62,7 @@ public class GlobalExceptionHandler {
         BusinessException business = findBusinessException(e);
         if (business != null) {
             log.warn("业务异常(被包装): {}", business.getMessage());
-            return Result.error(business.getMessage());
+            return Result.error(400, business.getMessage());
         }
         log.error("服务器异常", e);
         return Result.error("服务器异常，请稍后重试");

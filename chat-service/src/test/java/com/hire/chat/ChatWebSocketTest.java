@@ -39,7 +39,7 @@ class ChatWebSocketTest {
     @Autowired ChatSessions sessions;
     List<WebSocketSession> opened=new ArrayList<>();
     @AfterEach void close() throws Exception { for(WebSocketSession session:opened) session.close(); }
-    String token(long ttl) { return JwtUtil.createJWT(JwtConstant.SECRET_KEY,ttl,new HashMap<>(Map.of("userId",10,"role","seeker"))); }
+    String token(long ttl) { return JwtUtil.createJWT(JwtConstant.secretKey(),ttl,new HashMap<>(Map.of("userId",10,"role","seeker"))); }
     WebSocketSession connect(WebSocketHttpHeaders headers,BlockingQueue<String> received) throws Exception {
         WebSocketSession session=new StandardWebSocketClient().doHandshake(new TextWebSocketHandler(){
             @Override protected void handleTextMessage(WebSocketSession session,TextMessage message) { received.add(message.getPayload()); }

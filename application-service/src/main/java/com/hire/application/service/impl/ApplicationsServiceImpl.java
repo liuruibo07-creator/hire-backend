@@ -5,6 +5,7 @@ import com.hire.application.mapper.AdminApplicationMapper;
 import com.hire.application.mapper.ApplicationsMapper;
 import com.hire.application.mapper.ResumeMapper;
 import com.hire.application.service.ApplicationsService;
+import com.hire.application.outbox.ApplicationOutbox;
 import com.hire.common.Result;
 import com.hire.common.constant.MqConstants;
 import com.hire.common.context.UserContext;
@@ -25,13 +26,9 @@ import com.hire.model.vo.PageResult;
 import com.hire.model.vo.ReceivedApplicationVO;
 import io.seata.spring.annotation.GlobalTransactional;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.amqp.core.MessageDeliveryMode;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Duration;
 import java.time.LocalDate;
@@ -53,7 +50,7 @@ import java.util.UUID;
  * 4. 写投递记录 + 投递成功后发 MQ 事件（notification-service 消费）
  *
  * 第 3、4 步是跨服务操作，这里用本地事务保证本库数据一致，
- * MQ 消息通过事务同步器在提交后才真正发出，避免“事务回滚了消息却发了”。
+ * MQ 事件与投递记录在同一事务持久化，由 outbox 任务确认提交后重试发送。
  *
  * 跨服务强一致（第 3 步）由 Seata AT 模式保证：本方法是全局事务发起方，
  * @GlobalTransactional 开启全局事务，XID 通过 Feign 拦截器透传给 job-service，
@@ -85,7 +82,7 @@ public class ApplicationsServiceImpl implements ApplicationsService {
     @Autowired
     private JobClient jobClient;
     @Autowired
-    private RabbitTemplate rabbitTemplate;
+    private ApplicationOutbox outbox;
     @Autowired
     private AdminApplicationMapper adminApplicationMapper;
     @Autowired
@@ -107,9 +104,9 @@ public class ApplicationsServiceImpl implements ApplicationsService {
             throw new BusinessException("用户未登录，请先登录");
         }
 
-        // 3. 角色校验：只有求职者可以投递；role 头缺失时不强校验，避免网关未透传时误伤
+        // 3. 角色校验：只有求职者可以投递，缺失角色时也拒绝。
         String role = UserContext.getCurrentRole();
-        if (role != null && !"seeker".equals(role)) {
+        if (!"seeker".equals(role)) {
             throw new BusinessException("只有求职者可以投递简历");
         }
 
@@ -161,7 +158,7 @@ public class ApplicationsServiceImpl implements ApplicationsService {
             throw new BusinessException("职位投递数更新失败，请稍后重试");
         }
 
-        // 9. 组装并发送投递事件，事务提交后才真正发出
+        // 9. 与投递记录同事务保存事件，全局事务提交后由 outbox 发送
         ApplicationSubmittedEvent event = ApplicationSubmittedEvent.builder()
                 .messageId(UUID.randomUUID().toString())
                 .applicationId(applicationId)
@@ -322,7 +319,7 @@ public class ApplicationsServiceImpl implements ApplicationsService {
             throw new BusinessException("投递状态更新失败，请稍后重试");
         }
 
-        // 6. 组装并发送状态变更事件，事务提交后才真正发出
+        // 6. 与状态更新同事务保存事件，由 outbox 发送
         ApplicationStatusChangedEvent event = ApplicationStatusChangedEvent.builder()
                 .messageId(UUID.randomUUID().toString())
                 .applicationId(id)
@@ -487,88 +484,12 @@ public class ApplicationsServiceImpl implements ApplicationsService {
         return result.getData();
     }
 
-    /**
-     * 发送投递成功事件。
-     *
-     * 必须在事务方法内部调用：registerSynchronization 依赖线程绑定的事务同步器，
-     * 只有在事务尚未结束时才有效，因此不能放到 Controller，也不能加 @Async 换新线程。
-     */
     private void publishApplicationSubmitted(ApplicationSubmittedEvent event) {
-        if (TransactionSynchronizationManager.isSynchronizationActive()) {
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    sendEventSafely(event);
-                }
-            });
-        } else {
-            // 没有事务（例如被类内部无事务方法调用、或单元测试）时直接发送
-            sendEventSafely(event);
-        }
+        outbox.enqueue(event.getMessageId(), MqConstants.ROUTING_KEY_APPLICATION_SUBMITTED, event);
     }
 
-    /**
-     * 真正发送消息。
-     *
-     * 重点：在 afterCommit 阶段事务已经提交，这里抛出的任何异常都回滚不了数据，
-     * 只会把一次已经成功的投递变成前端的“服务器异常”，因此必须全部捕获并记录，
-     * 等待后续补偿（TODO 本地消息表 + 定时任务重发）。
-     */
-    private void sendEventSafely(ApplicationSubmittedEvent event) {
-        try {
-            rabbitTemplate.convertAndSend(
-                    MqConstants.EXCHANGE,
-                    MqConstants.ROUTING_KEY_APPLICATION_SUBMITTED,
-                    event,
-                    message -> {
-                        message.getMessageProperties().setMessageId(event.getMessageId());
-                        // 持久化：Broker 重启后消息不丢失
-                        message.getMessageProperties().setDeliveryMode(MessageDeliveryMode.PERSISTENT);
-                        return message;
-                    });
-        } catch (Exception e) {
-            log.error("投递事件发送失败, applicationId={}, messageId={}, 该消息需要补偿重发",
-                    event.getApplicationId(), event.getMessageId(), e);
-        }
-    }
-
-    /**
-     * 发送投递状态变更事件，逻辑与 publishApplicationSubmitted 一致：事务提交后才真正发出。
-     */
     private void publishApplicationStatusChanged(ApplicationStatusChangedEvent event) {
-        if (TransactionSynchronizationManager.isSynchronizationActive()) {
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    sendStatusEventSafely(event);
-                }
-            });
-        } else {
-            // 没有事务时直接发送
-            sendStatusEventSafely(event);
-        }
-    }
-
-    /**
-     * 真正发送状态变更消息：在 afterCommit 阶段事务已提交，这里抛出的任何异常
-     * 都回滚不了数据，因此必须全部捕获并记录，等待后续补偿。
-     */
-    private void sendStatusEventSafely(ApplicationStatusChangedEvent event) {
-        try {
-            rabbitTemplate.convertAndSend(
-                    MqConstants.EXCHANGE,
-                    MqConstants.ROUTING_KEY_APPLICATION_STATUS_CHANGED,
-                    event,
-                    message -> {
-                        message.getMessageProperties().setMessageId(event.getMessageId());
-                        // 持久化：Broker 重启后消息不丢失
-                        message.getMessageProperties().setDeliveryMode(MessageDeliveryMode.PERSISTENT);
-                        return message;
-                    });
-        } catch (Exception e) {
-            log.error("投递状态变更事件发送失败, applicationId={}, messageId={}, 该消息需要补偿重发",
-                    event.getApplicationId(), event.getMessageId(), e);
-        }
+        outbox.enqueue(event.getMessageId(), MqConstants.ROUTING_KEY_APPLICATION_STATUS_CHANGED, event);
     }
 
     /**

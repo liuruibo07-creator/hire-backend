@@ -6,7 +6,6 @@ import com.hire.model.entity.*;
 import com.hire.chat.exception.ChatException;
 import com.hire.chat.service.*;
 import com.hire.chat.websocket.ChatSessions;
-import com.hire.common.utils.RedisUtil;
 import com.hire.model.vo.*;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.junit.jupiter.api.*;
@@ -15,7 +14,8 @@ import org.mybatis.spring.mapper.MapperFactoryBean;
 import org.springframework.amqp.AmqpConnectException;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.context.annotation.*;
-import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.ClassPathResource;
+import com.hire.common.utils.RedisUtil;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.*;
 import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
@@ -23,14 +23,13 @@ import org.springframework.transaction.*;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.transaction.support.TransactionTemplate;
 import javax.sql.DataSource;
-import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-/** Uses the deployment DDL. Optional CHAT_TEST_MYSQL_URL must point to a dedicated disposable database. */
+/** Self-contained database fixture. Optional CHAT_TEST_MYSQL_URL must target a disposable database. */
 class ChatDatabaseTest {
     static AnnotationConfigApplicationContext context;
     static DataSource dataSource;
@@ -59,16 +58,17 @@ class ChatDatabaseTest {
         String url=System.getenv("CHAT_TEST_MYSQL_URL");
         dataSource=url==null ? new DriverManagerDataSource("jdbc:h2:mem:chat;MODE=MySQL;DB_CLOSE_DELAY=-1;LOCK_TIMEOUT=10000","sa","")
                 : new DriverManagerDataSource(url,System.getenv().getOrDefault("CHAT_TEST_MYSQL_USER","root"),System.getenv().getOrDefault("CHAT_TEST_MYSQL_PASSWORD",""));
-        new ResourceDatabasePopulator(new FileSystemResource(Path.of("../sql/chat.sql"))).execute(dataSource);
+        new ResourceDatabasePopulator(new ClassPathResource("chat-schema.sql")).execute(dataSource);
         directory=mock(ChatDirectory.class); rabbit=mock(RabbitTemplate.class);
         context=new AnnotationConfigApplicationContext();
         context.registerBean(DataSource.class,()->dataSource);
         context.registerBean(ChatDirectory.class,()->directory);
         context.registerBean(RabbitTemplate.class,()->rabbit);
-        context.registerBean(RedisUtil.class,()-> {
-            RedisUtil redis = mock(RedisUtil.class);
-            when(redis.getLong(anyString())).thenReturn(null);
-            return redis;
+        context.registerBean(RedisUtil.class, () -> {
+            RedisUtil cache = mock(RedisUtil.class);
+            // Exercise database correctness without an external Redis server or stale counter cache.
+            when(cache.getLong(anyString())).thenReturn(null);
+            return cache;
         });
         context.registerBean(ChatSessions.class,()->mock(ChatSessions.class));
         context.registerBean(com.fasterxml.jackson.databind.ObjectMapper.class,

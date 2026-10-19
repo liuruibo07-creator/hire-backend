@@ -33,7 +33,7 @@ public class MqConfig {
 
         rabbitTemplate.setConfirmCallback((correlationData, ack, cause) -> {
             if (!ack) {
-                // TODO 可靠性增强：此处可将消息写入本地消息表，由定时任务补偿重发
+                // OutboxDispatcher waits for this confirmation and retains failed deliveries.
                 log.error("消息未到达 Broker, correlationData={}, cause={}", correlationData, cause);
             }
         });

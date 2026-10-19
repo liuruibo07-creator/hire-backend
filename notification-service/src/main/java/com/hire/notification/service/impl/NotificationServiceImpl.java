@@ -1,7 +1,6 @@
 package com.hire.notification.service.impl;
 
 import cn.hutool.core.util.StrUtil;
-import com.hire.common.utils.RedisUtil;
 import com.hire.common.utils.SnowflakeIdWorker;
 import com.hire.model.dto.ApplicationStatusChangedEvent;
 import com.hire.model.dto.ApplicationSubmittedEvent;
@@ -15,7 +14,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
 
@@ -33,26 +31,21 @@ public class NotificationServiceImpl implements NotificationService {
     @Autowired
     private NotificationMapper notificationMapper;
 
-    @Autowired
-    private RedisUtil redisUtil;
-
-    /** Redis 键前缀:用户未读通知数(notify:unread:{userId}) */
-    private static final String KEY_UNREAD = "notify:unread:";
-    /** 未读数缓存 TTL:30 分钟兜底,正常由"标记已读"主动删除 */
-    private static final Duration UNREAD_TTL = Duration.ofMinutes(30);
-
     /**
      * 投递提交事件处理：为职位发布者(企业)生成"收到新简历投递"通知
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void handleApplicationSubmitted(ApplicationSubmittedEvent event) {
-        if (event == null || StrUtil.isBlank(event.getMessageId()) || event.getEmployerId() == null) {
+        if (event == null || StrUtil.isBlank(event.getMessageId()) || event.getMessageId().length() > 64
+                || event.getEmployerId() == null) {
             // 缺少关键字段的消息永远无法处理成功，重试多少次都一样，
             // 必须抛异常让重试耗尽后转入错误队列，由人工介入；不能静默 return
             log.error("投递事件缺少关键字段, event={}", event);
             throw new IllegalArgumentException("投递事件缺少关键字段: " + event);
         }
+
+        if (notificationMapper.claimEvent(event.getMessageId()) == 0) return;
 
         String jobTitle = StrUtil.isBlank(event.getJobTitle()) ? "" : event.getJobTitle();
         String content = String.format("有求职者投递了职位《%s》，请及时查看处理。", jobTitle);
@@ -70,13 +63,8 @@ public class NotificationServiceImpl implements NotificationService {
 
         int rows = notificationMapper.insert(notification);
         if (rows == 0) {
-            log.warn("通知插入失败, messageId={}", event.getMessageId());
+            throw new IllegalStateException("Notification insert failed");
         } else {
-            // 未读计数+1(仅插入成功时计数,重复消息不会走到这里)
-            Long unread = redisUtil.increment(KEY_UNREAD + event.getEmployerId());
-            if (unread != null && unread == 1L) {
-                redisUtil.expire(KEY_UNREAD + event.getEmployerId(), UNREAD_TTL);
-            }
             log.info("通知已生成, messageId={}, employerId={}, applicationId={}",
                     event.getMessageId(), event.getEmployerId(), event.getApplicationId());
         }
@@ -88,11 +76,13 @@ public class NotificationServiceImpl implements NotificationService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void handleApplicationStatusChanged(ApplicationStatusChangedEvent event) {
-        if (event == null || StrUtil.isBlank(event.getMessageId())
+        if (event == null || StrUtil.isBlank(event.getMessageId()) || event.getMessageId().length() > 64
                 || event.getApplicantId() == null || event.getStatus() == null) {
             log.error("投递状态变更事件缺少关键字段, event={}", event);
             throw new IllegalArgumentException("投递状态变更事件缺少关键字段: " + event);
         }
+
+        if (notificationMapper.claimEvent(event.getMessageId()) == 0) return;
 
         String jobTitle = StrUtil.isBlank(event.getJobTitle()) ? "" : event.getJobTitle();
         String statusText = statusText(event.getStatus());
@@ -115,13 +105,8 @@ public class NotificationServiceImpl implements NotificationService {
 
         int rows = notificationMapper.insert(notification);
         if (rows == 0) {
-            log.warn("状态变更通知插入失败, messageId={}", event.getMessageId());
+            throw new IllegalStateException("Notification insert failed");
         } else {
-            // 未读计数+1(仅插入成功时计数)
-            Long unread = redisUtil.increment(KEY_UNREAD + event.getApplicantId());
-            if (unread != null && unread == 1L) {
-                redisUtil.expire(KEY_UNREAD + event.getApplicantId(), UNREAD_TTL);
-            }
             log.info("状态变更通知已生成, messageId={}, applicantId={}, status={}",
                     event.getMessageId(), event.getApplicantId(), event.getStatus());
         }
@@ -148,27 +133,18 @@ public class NotificationServiceImpl implements NotificationService {
 
     @Override
     public int countUnread(Long userId) {
-        // 未读数缓存(Cache Aside):命中直接返回,未命中回源并回填;Redis 异常时 RedisUtil 已降级
-        Long cached = redisUtil.getLong(KEY_UNREAD + userId);
-        if (cached != null) {
-            return cached.intValue();
-        }
-        int count = notificationMapper.countUnread(userId);
-        redisUtil.set(KEY_UNREAD + userId, String.valueOf(count), UNREAD_TTL);
-        return count;
+        // Read the source of truth: INCR on an absent cache loses existing unread notifications.
+        return notificationMapper.countUnread(userId);
     }
 
     @Override
     public void markAsRead(Long id, Long userId) {
         notificationMapper.markAsRead(id, userId);
-        // 未读数已变化,删除缓存,下次查询回源重新计算
-        redisUtil.delete(KEY_UNREAD + userId);
     }
 
     @Override
     public void markAllAsRead(Long userId) {
         notificationMapper.markAllAsRead(userId);
-        redisUtil.delete(KEY_UNREAD + userId);
     }
 
     /**

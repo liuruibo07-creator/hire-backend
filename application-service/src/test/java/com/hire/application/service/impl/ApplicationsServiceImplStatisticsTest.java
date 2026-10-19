@@ -5,7 +5,6 @@ import com.hire.application.mapper.AdminApplicationMapper;
 import com.hire.application.mapper.ApplicationsMapper;
 import com.hire.application.mapper.ResumeMapper;
 import com.hire.common.exception.BusinessException;
-import com.hire.common.utils.RedisUtil;
 import com.hire.model.vo.ApplicationStatisticsVO;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -59,7 +58,7 @@ class ApplicationsServiceImplStatisticsTest {
     private AdminApplicationMapper adminApplicationMapper;
 
     @Mock
-    private RedisUtil redisUtil;
+    private com.hire.common.utils.RedisUtil redisUtil;
 
     @InjectMocks
     private ApplicationsServiceImpl service;

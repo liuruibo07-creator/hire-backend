@@ -23,7 +23,7 @@ class UserLoginGlobalFilterTest {
                 "/api/job/jobs/{id:[0-9]+}", "/api/job/categories"));
         ReflectionTestUtils.setField(filter, "cloudProperties", properties);
     }
-    String token(Map<String,Object> claims, long ttl) { return JwtUtil.createJWT(JwtConstant.SECRET_KEY, ttl, new HashMap<>(claims)); }
+    String token(Map<String,Object> claims, long ttl) { return JwtUtil.createJWT(JwtConstant.secretKey(), ttl, new HashMap<>(claims)); }
     MockServerWebExchange run(MockServerHttpRequest request) {
         MockServerWebExchange exchange = MockServerWebExchange.from(request);
         filter.filter(exchange, value -> { forwarded.set(value); return Mono.empty(); }).block();

@@ -55,16 +55,15 @@ flowchart LR
 
 ## 构建与本地开发
 
-要求 JDK 17、Maven 3.8+。测试用 JWT 密钥必须显式提供：
+要求 JDK 17、Maven 3.8+。测试密钥由 Surefire 注入测试 JVM；运行服务时必须提供至少 32 字节的随机 `HIRE_JWT_SECRET`（兼容现有 `JWT_SECRET` 配置）：
 
 ```sh
-export JWT_SECRET=unit-test-key-only-do-not-use-in-production-2026
 mvn -B verify
 # 按需只构建一个服务及它依赖的公共模块
 mvn -B -pl job-service -am package -DskipTests
 ```
 
-PowerShell 使用 `$env:JWT_SECRET='unit-test-key-only-do-not-use-in-production-2026'` 设置测试环境变量。应用运行时请提供至少 32 字符的独立随机密钥，所有服务保持一致。
+PowerShell 的随机密钥生成与运行配置步骤见 [安全升级说明](docs/20261019-reliability-upgrade.md)。所有服务必须使用同一个有效密钥。
 
 原生启动前需准备可访问的 MySQL、Redis、Nacos、RabbitMQ、Elasticsearch/IK 与 Seata，并按实际环境设置 `NACOS_SERVER_ADDR`、`CLOUD_DATASOURCE_HOST`、`CLOUD_DATASOURCE_PASSWORD`、`SPRING_REDIS_HOST`、`SPRING_REDIS_PASSWORD`、`SPRING_RABBITMQ_HOST`、`RABBITMQ_USER`、`RABBITMQ_PASSWORD`、`CLOUD_ELASTICSEARCH_HOST` 和 Seata 的事务组映射与服务地址。可参考 [compose.yaml](compose.yaml) 的环境变量；Spring Boot 支持用环境变量覆盖 YAML 属性。构建后运行 `java -jar <服务>/target/<服务>-1.0.jar`。
 
@@ -98,3 +97,9 @@ Windows 可用 `Copy-Item .env.example .env`。默认浏览器入口为 `http://
 2026-10-01 发布检查：现有后端 15 个测试套件共 103 项测试通过，六个运行服务均生成带启动入口的可执行 JAR；指定前端 11 项测试及 Vite 生产构建通过。完整 Maven 验证暴露的过时 Redis 测试配置已在本发布副本修正，并对受影响模块重跑验证；application-service 补充了 Spring Boot 打包插件。YAML 文件通过解析检查。
 
 容器文件是单机开发/演示部署方案。发布时本机没有 Docker 引擎，镜像构建、容器启动及真实后端业务尚未端到端验证，不能把单元测试通过视为部署成功。全新安装的用户与职位 DDL 按当前 Mapper 补齐；已有数据库需要自行检查迁移差异，不要直接覆盖。
+
+## 2026-10-19 安全与消息可靠性升级
+
+密码改为 BCrypt，并在旧 SHA-256 账户成功登录后自动升级；通知未读数从数据库准确计算；投递接口统一错误响应；投递事件使用事务 outbox、broker 确认、失败退避和消费去重。
+
+**已有部署需要先执行建表迁移，再发布消费者和生产者。** 新数据卷由 `deploy/mysql/02-reliability.sql` 初始化。详见 [迁移与验证说明](docs/20261019-reliability-upgrade.md)。

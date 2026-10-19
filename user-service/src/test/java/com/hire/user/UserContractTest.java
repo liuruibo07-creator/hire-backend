@@ -1,6 +1,7 @@
 package com.hire.user;
 
 import cn.hutool.crypto.digest.DigestUtil;
+import com.hire.user.security.PasswordHashes;
 import com.fasterxml.jackson.databind.*;
 import com.hire.common.context.UserContext;
 import com.hire.common.utils.RedisUtil;
@@ -62,7 +63,7 @@ class UserContractTest {
         mvc.perform(post("/api/user/users/register").contentType(MediaType.APPLICATION_JSON).content(registration()))
             .andExpect(jsonPath("$.code").value(200)).andExpect(jsonPath("$.message").value("注册成功"))
             .andExpect(jsonPath("$.msg").doesNotExist()).andExpect(jsonPath("$.data").isNumber());
-        verify(mapper).insert(argThat(u->u.getId()!=null && u.getPassword().equals(DigestUtil.sha256Hex("123456")) && u.getStatus()==1));
+        verify(mapper).insert(argThat(u->u.getId()!=null && u.getPassword().startsWith("$2") && PasswordHashes.matches("123456",u.getPassword()) && u.getStatus()==1));
     }
     @Test void registerRequiresEmailAndRole() throws Exception {
         for(String body:Arrays.asList(registration().replace("\"seeker\"","\"admin\""),
@@ -88,6 +89,7 @@ class UserContractTest {
     }
     @Test void loginReturnsUserIdAndTokenAndRecordsTime() throws Exception {
         when(mapper.findByAccount("name2")).thenReturn(seeker); when(mapper.updateLoginTime(eq(2L),any())).thenReturn(1);
+        when(mapper.updatePassword(eq(2L),any(),any(),any())).thenReturn(1);
         mvc.perform(post("/api/user/users/login").contentType(MediaType.APPLICATION_JSON).content("{\"username\":\"name2\",\"password\":\"123456\"}"))
             .andExpect(jsonPath("$.code").value(200)).andExpect(jsonPath("$.data.userId").value(2))
             .andExpect(jsonPath("$.data.token").isString()).andExpect(jsonPath("$.data.password").doesNotExist());
@@ -101,6 +103,29 @@ class UserContractTest {
         mvc.perform(post("/api/user/users/login").contentType(MediaType.APPLICATION_JSON).content("{\"username\":\"name2\",\"password\":\"123456\"}"))
             .andExpect(jsonPath("$.code").value(403));
         verify(mapper,never()).updateLoginTime(any(),any());
+    }
+    @Test void successfulLegacyLoginUpgradesPasswordBeforeIssuingToken() {
+        when(mapper.findByAccount("name2")).thenReturn(seeker);
+        when(mapper.updatePassword(eq(2L),eq(seeker.getPassword()),any(),any())).thenReturn(1);
+        when(mapper.updateLoginTime(eq(2L),any())).thenReturn(1);
+        UserLoginDTO dto = new UserLoginDTO(); dto.setUsername("name2"); dto.setPassword("123456");
+        assertNotNull(service.login(dto).get("token"));
+        verify(mapper).updatePassword(eq(2L),eq(seeker.getPassword()),
+                argThat(hash -> !PasswordHashes.legacy(hash) && PasswordHashes.matches("123456",hash)),any());
+    }
+    @Test void migrationConflictDoesNotIssueTokenOrOverwriteConcurrentPassword() {
+        when(mapper.findByAccount("name2")).thenReturn(seeker);
+        UserLoginDTO dto = new UserLoginDTO(); dto.setUsername("name2"); dto.setPassword("123456");
+        assertThrows(com.hire.user.exception.UserApiException.class, () -> service.login(dto));
+        verify(mapper,never()).updateLoginTime(any(),any());
+    }
+    @Test void bcryptLoginDoesNotRewriteHash() {
+        seeker.setPassword(PasswordHashes.encode("123456"));
+        when(mapper.findByAccount("name2")).thenReturn(seeker);
+        when(mapper.updateLoginTime(eq(2L),any())).thenReturn(1);
+        UserLoginDTO dto = new UserLoginDTO(); dto.setUsername("name2"); dto.setPassword("123456");
+        assertNotNull(service.login(dto).get("token"));
+        verify(mapper,never()).updatePassword(any(),any(),any(),any());
     }
     @Test void meRequiresLoginAndOmitsPassword() throws Exception {
         mvc.perform(get("/api/user/users/me")).andExpect(jsonPath("$.code").value(401));
@@ -129,7 +154,7 @@ class UserContractTest {
         mvc.perform(put("/api/user/users/me/password").header("X-User-Id","2").contentType(MediaType.APPLICATION_JSON)
                 .content("{\"oldPassword\":\"123456\",\"newPassword\":\"abcdef\"}"))
             .andExpect(jsonPath("$.code").value(200));
-        verify(mapper).updatePassword(eq(2L),eq(DigestUtil.sha256Hex("123456")),eq(DigestUtil.sha256Hex("abcdef")),any());
+        verify(mapper).updatePassword(eq(2L),eq(DigestUtil.sha256Hex("123456")),argThat(hash -> hash.startsWith("$2") && PasswordHashes.matches("abcdef",hash)),any());
     }
     @Test void allAdminEndpointsCheckDatabaseRole() throws Exception {
         for(String path:Arrays.asList("/api/user/admin/users","/api/user/admin/users/2","/api/user/admin/statistics")) {

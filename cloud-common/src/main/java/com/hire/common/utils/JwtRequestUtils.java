@@ -32,7 +32,7 @@ public final class JwtRequestUtils {
 
     public static Claims parse(String token) {
         if (token == null || token.isBlank()) throw new IllegalArgumentException("Missing token");
-        Claims claims = JwtUtil.parseJWT(JwtConstant.SECRET_KEY, token);
+        Claims claims = JwtUtil.parseJWT(JwtConstant.secretKey(), token);
         userId(claims);
         if (claims.getExpiration() == null) throw new IllegalArgumentException("Missing expiration");
         return claims;

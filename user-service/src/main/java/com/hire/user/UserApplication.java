@@ -7,5 +7,8 @@ import org.springframework.cloud.openfeign.EnableFeignClients;
 @MapperScan("com.hire.user.mapper")
 @EnableFeignClients(basePackages="com.hire.user.client")
 public class UserApplication {
-    public static void main(String[] args) { SpringApplication.run(UserApplication.class,args); }
+    public static void main(String[] args) {
+        com.hire.common.constant.JwtConstant.secretKey();
+        SpringApplication.run(UserApplication.class,args);
+    }
 }

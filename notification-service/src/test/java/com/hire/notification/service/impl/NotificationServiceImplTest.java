@@ -1,6 +1,5 @@
 package com.hire.notification.service.impl;
 
-import com.hire.common.utils.RedisUtil;
 import com.hire.model.dto.ApplicationSubmittedEvent;
 import com.hire.model.dto.NotificationQueryDTO;
 import com.hire.model.entity.Notification;
@@ -32,9 +31,6 @@ class NotificationServiceImplTest {
     @Mock
     private NotificationMapper notificationMapper;
 
-    @Mock
-    private RedisUtil redisUtil;
-
     @InjectMocks
     private NotificationServiceImpl notificationService;
 
@@ -58,6 +54,7 @@ class NotificationServiceImplTest {
 
     @Test
     void handleApplicationSubmitted_success() {
+        when(notificationMapper.claimEvent(event.getMessageId())).thenReturn(1);
         when(notificationMapper.insert(any(Notification.class))).thenReturn(1);
 
         notificationService.handleApplicationSubmitted(event);
@@ -105,6 +102,7 @@ class NotificationServiceImplTest {
     @Test
     void handleApplicationSubmitted_blankJobTitle_usesEmptyString() {
         event.setJobTitle("");
+        when(notificationMapper.claimEvent(event.getMessageId())).thenReturn(1);
         when(notificationMapper.insert(any(Notification.class))).thenReturn(1);
 
         notificationService.handleApplicationSubmitted(event);
@@ -115,6 +113,18 @@ class NotificationServiceImplTest {
     }
 
     // ========== pageNotifications ==========
+
+    @Test void redeliveryDoesNotInsertAnotherNotification() {
+        when(notificationMapper.claimEvent(event.getMessageId())).thenReturn(0);
+        notificationService.handleApplicationSubmitted(event);
+        verify(notificationMapper, never()).insert(any());
+    }
+
+    @Test void failedNotificationInsertPropagatesForTransactionRollback() {
+        when(notificationMapper.claimEvent(event.getMessageId())).thenReturn(1);
+        when(notificationMapper.insert(any(Notification.class))).thenReturn(0);
+        assertThrows(IllegalStateException.class, () -> notificationService.handleApplicationSubmitted(event));
+    }
 
     @Test
     void pageNotifications_firstPage_correctOffset() {
@@ -210,14 +220,12 @@ class NotificationServiceImplTest {
 
     @Test
     void countUnread_normal() {
-        when(redisUtil.getLong("notify:unread:1")).thenReturn(null);
         when(notificationMapper.countUnread(1L)).thenReturn(5);
         assertEquals(5, notificationService.countUnread(1L));
     }
 
     @Test
     void countUnread_zero() {
-        when(redisUtil.getLong("notify:unread:1")).thenReturn(null);
         when(notificationMapper.countUnread(1L)).thenReturn(0);
         assertEquals(0, notificationService.countUnread(1L));
     }

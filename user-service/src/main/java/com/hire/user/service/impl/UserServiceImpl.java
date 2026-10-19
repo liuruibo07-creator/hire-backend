@@ -3,7 +3,7 @@ package com.hire.user.service.impl;
 import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.RandomUtil;
 import cn.hutool.core.util.StrUtil;
-import cn.hutool.crypto.digest.DigestUtil;
+import com.hire.user.security.PasswordHashes;
 import com.hire.common.constant.JwtConstant;
 import com.hire.common.context.UserContext;
 import com.hire.common.utils.JsonUtils;
@@ -75,13 +75,17 @@ public class UserServiceImpl implements UserService {
     public Map<String,Object> login(UserLoginDTO dto) {
         check(dto!=null && StrUtil.isNotBlank(dto.getUsername()) && StrUtil.isNotBlank(dto.getPassword()),400,"用户名和密码不能为空");
         UserRecord user=mapper.findByAccount(dto.getUsername());
-        check(user!=null && DigestUtil.sha256Hex(dto.getPassword()).equals(user.getPassword()),401,"用户名或密码错误");
+        check(user!=null && PasswordHashes.matches(dto.getPassword(),user.getPassword()),401,"用户名或密码错误");
         check(Integer.valueOf(1).equals(user.getStatus()),403,"账户已禁用");
+        if (PasswordHashes.legacy(user.getPassword())) {
+            check(mapper.updatePassword(user.getId(),user.getPassword(),PasswordHashes.encode(dto.getPassword()),now())==1,
+                    409,"用户信息已变化，请重试登录");
+        }
         check(mapper.updateLoginTime(user.getId(),now())==1,403,"账户不可用");
         Map<String,Object> claims=new HashMap<>();
         claims.put(JwtConstant.USER_ID,user.getId()); claims.put(JwtConstant.ROLE,user.getRole());
         Map<String,Object> result=new LinkedHashMap<>();
-        result.put("token",JwtUtil.createJWT(JwtConstant.SECRET_KEY,JwtConstant.TTL_MILLIS,claims));
+        result.put("token",JwtUtil.createJWT(JwtConstant.secretKey(),JwtConstant.TTL_MILLIS,claims));
         result.put("userId",user.getId()); result.put("username",user.getUsername());
         result.put("role",user.getRole()); result.put("realName",user.getRealName());
         return result;
@@ -97,7 +101,7 @@ public class UserServiceImpl implements UserService {
         check(mapper.countByEmail(dto.getEmail(),null)==0,409,"邮箱已存在");
         UserRecord user=new UserRecord();
         user.setId(IdUtil.getSnowflakeNextId()); user.setUsername(dto.getUsername());
-        user.setPassword(DigestUtil.sha256Hex(dto.getPassword())); user.setEmail(dto.getEmail());
+        user.setPassword(PasswordHashes.encode(dto.getPassword())); user.setEmail(dto.getEmail());
         user.setPhone(dto.getPhone()); user.setRealName(dto.getRealName()); user.setRole(dto.getRole());
         user.setStatus(1); user.setCreateTime(now()); user.setUpdateTime(user.getCreateTime());
         mapper.insert(user);
@@ -151,8 +155,8 @@ public class UserServiceImpl implements UserService {
         UserRecord user=current();
         check(dto!=null && StrUtil.isNotBlank(dto.getOldPassword()),400,"原密码不能为空");
         password(dto.getNewPassword());
-        check(DigestUtil.sha256Hex(dto.getOldPassword()).equals(user.getPassword()),400,"原密码错误");
-        check(mapper.updatePassword(user.getId(),user.getPassword(),DigestUtil.sha256Hex(dto.getNewPassword()),now())==1,409,"用户信息已变化，请重试");
+        check(PasswordHashes.matches(dto.getOldPassword(),user.getPassword()),400,"原密码错误");
+        check(mapper.updatePassword(user.getId(),user.getPassword(),PasswordHashes.encode(dto.getNewPassword()),now())==1,409,"用户信息已变化，请重试");
     }
     @Override public Map<String,Object> listUsers(int page,int size,String role,Integer status,String keyword) {
         admin(); check(page>=1 && size>=1,400,"分页参数不合法");

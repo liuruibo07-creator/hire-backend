@@ -44,7 +44,7 @@ class ChatWebSocketProxyTest {
     @LocalServerPort int port;
     @AfterAll static void stop() { backend.disposeNow(); }
     @Test void forwardsBrowserSubprotocolAndAuthenticatedIdentityThroughGateway() {
-        String token=JwtUtil.createJWT(JwtConstant.SECRET_KEY,60000,new HashMap<>(Map.of("userId",7,"role","seeker")));
+        String token=JwtUtil.createJWT(JwtConstant.secretKey(),60000,new HashMap<>(Map.of("userId",7,"role","seeker")));
         String message=HttpClient.create().headers(h->{h.set("userId","999");h.set("role","admin");h.set("X-User-Id","999");})
                 .websocket(WebsocketClientSpec.builder().protocols("chat.v1,bearer."+token).build())
                 .uri("ws://127.0.0.1:"+port+"/api/chat/ws")

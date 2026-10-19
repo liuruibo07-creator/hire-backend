@@ -20,7 +20,7 @@ class ApplicationChatControllerTest {
         mvc=MockMvcBuilders.standaloneSetup(new ApplicationChatController(mapper)).build();
         when(mapper.selectById(3L)).thenReturn(Applications.builder().id(3L).userId(10L).employerId(20L).jobId(30L).build());
     }
-    String auth(long id,String role) { return "Bearer "+JwtUtil.createJWT(JwtConstant.SECRET_KEY,60000,new java.util.HashMap<>(Map.of("userId",id,"role",role))); }
+    String auth(long id,String role) { return "Bearer "+JwtUtil.createJWT(JwtConstant.secretKey(),60000,new java.util.HashMap<>(Map.of("userId",id,"role",role))); }
     @Test void returnsOnlyMinimalRelationshipToOwningEmployer() throws Exception {
         mvc.perform(get("/applications/3/chat-context/internal").header("Authorization",auth(20,"employer")))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.code").value(200))
